@@ -9,7 +9,11 @@ import os
 # -----------------------------
 # IMPORT YOUR MODEL & FEATURES
 # -----------------------------
+
 from model import CNNClassifier        # ✅ correct class name
+
+from model import CNNClassifier
+
 from features import extract_logmel    # ✅ feature extractor
 
 # -----------------------------
