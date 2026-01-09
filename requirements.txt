@@ -10,4 +10,4 @@ soundfile==0.12.1
 rich
 matplotlib==3.7.2
 llvmlite==0.40.1
-torch==2.0.1
+torch>=2.5.0
