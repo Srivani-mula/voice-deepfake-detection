@@ -1,7 +1,9 @@
-streamlit
+streamlit==1.30.0
 torch==2.0.1
-numpy
-librosa
-soundfile
-scikit-learn
-matplotlib
+numpy==1.23.5
+librosa==0.10.1
+soundfile==0.12.1
+scikit-learn==1.2.2
+matplotlib==3.7.2
+numba==0.57.1
+llvmlite==0.40.1
