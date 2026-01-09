@@ -91,6 +91,22 @@ def predict_audio(wav_path):
 # -----------------------------
 # UI
 # -----------------------------
+
+st.markdown("""
+    <style>
+        /* Main title */
+        h1 {
+            color: #0B1C2D !important; /* Navy Blue */
+            font-weight: 700;
+        }
+
+        /* Optional: subtitle / text */
+        h2, h3, p, label {
+            color: #1F2937;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("🎙️ Voice Deepfake Detection")
 st.caption("AI-powered system to detect whether a voice is real or AI-generated")
 
