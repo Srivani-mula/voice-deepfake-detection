@@ -9,7 +9,7 @@ import os
 # -----------------------------
 # IMPORT YOUR MODEL & FEATURES
 # -----------------------------
-from model import CNNModel
+from model import CNNClassifier        # ✅ correct class name
 from features import extract_logmel    # ✅ feature extractor
 
 # -----------------------------
@@ -59,7 +59,10 @@ body {
 @st.cache_resource
 def load_model():
     model = CNNClassifier()
-    model.load_state_dict(torch.load("cnn_asvspoof.pth", map_location="cpu"))
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    MODEL_PATH = os.path.join(BASE_DIR, "cnn_asvspoof.pth")
+    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+
     model.eval()
     return model
 
