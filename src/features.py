@@ -2,7 +2,8 @@ import librosa
 import numpy as np
 
 def extract_logmel(wav_path, sr=16000, n_mels=64, target_frames=96):
-    y, sr = librosa.load(wav_path, sr=sr)
+   y, sr = librosa.load(wav_path, sr=16000, mono=True)
+
 
     mel = librosa.feature.melspectrogram(
         y=y,
