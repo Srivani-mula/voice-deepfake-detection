@@ -6,15 +6,8 @@ import soundfile as sf
 import tempfile
 import os
 
-# -----------------------------
-# IMPORT YOUR MODEL & FEATURES
-# -----------------------------
-
-from model import CNNClassifier        # ✅ correct class name
-
 from model import CNNClassifier
-
-from features import extract_logmel    # ✅ feature extractor
+from features import extract_logmel
 
 # -----------------------------
 # PAGE CONFIG
@@ -26,14 +19,11 @@ st.set_page_config(
 )
 
 # -----------------------------
-# CUSTOM CSS (Clean UI)
+# CUSTOM CSS
 # -----------------------------
 st.markdown("""
 <style>
 body {
-    background-color: #f5f7fb;
-}
-.main {
     background-color: #f5f7fb;
 }
 .block-container {
@@ -63,20 +53,41 @@ body {
 @st.cache_resource
 def load_model():
     model = CNNClassifier()
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    MODEL_PATH = os.path.join(BASE_DIR, "cnn_asvspoof.pth")
-    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
-
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(base_dir, "cnn_asvspoof.pth")
+    model.load_state_dict(torch.load(model_path, map_location="cpu"))
     model.eval()
     return model
 
 model = load_model()
 
 # -----------------------------
+# SAFE AUDIO LOADER (CRITICAL)
+# -----------------------------
+def load_audio_safe(path, target_sr=16000):
+    try:
+        audio, sr = sf.read(path)
+        if audio.ndim > 1:
+            audio = np.mean(audio, axis=1)
+        if sr != target_sr:
+            audio = librosa.resample(audio, sr, target_sr)
+    except Exception:
+        audio, sr = librosa.load(path, sr=target_sr)
+
+    if audio is None or len(audio) < target_sr:
+        raise ValueError("Audio too short or corrupted")
+
+    return audio
+
+# -----------------------------
 # PREDICTION FUNCTION
 # -----------------------------
-def predict_audio(wav_path):
-    features = extract_logmel(wav_path)           # (T, F)
+def predict_audio(audio):
+    features = extract_logmel(audio)
+
+    if features is None or np.isnan(features).any():
+        raise ValueError("Feature extraction failed")
+
     features = torch.tensor(features).unsqueeze(0).unsqueeze(0).float()
 
     with torch.no_grad():
@@ -91,25 +102,8 @@ def predict_audio(wav_path):
 # -----------------------------
 # UI
 # -----------------------------
-
-st.markdown("""
-    <style>
-        /* Main title */
-        h1 {
-            color: #0B1C2D !important; /* Navy Blue */
-            font-weight: 700;
-        }
-
-        /* Optional: subtitle / text */
-        h2, h3, p, label {
-            color: #1F2937;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 st.title("🎙️ Voice Deepfake Detection")
 st.caption("AI-powered system to detect whether a voice is real or AI-generated")
-
 st.markdown("---")
 
 uploaded_file = st.file_uploader(
@@ -124,23 +118,14 @@ if uploaded_file is not None:
     st.audio(uploaded_file)
 
     try:
-        # Save uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(uploaded_file.read())
             input_path = tmp.name
 
-        # Load audio safely
-        audio, sr = librosa.load(input_path, sr=16000)
+        audio = load_audio_safe(input_path)
 
-        # Convert to WAV (model-safe)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_tmp:
-            wav_path = wav_tmp.name
-            sf.write(wav_path, audio, sr)
+        label, confidence, _ = predict_audio(audio)
 
-        # Predict
-        label, confidence, probs = predict_audio(wav_path)
-
-        # Display result
         if "Bonafide" in label:
             st.markdown(
                 f"<div class='result-box real'>✅ {label}<br>Confidence: {confidence:.2f}%</div>",
@@ -154,9 +139,7 @@ if uploaded_file is not None:
 
         st.progress(int(confidence))
 
-        # Cleanup
         os.remove(input_path)
-        os.remove(wav_path)
 
     except Exception as e:
-        st.error(f"Error processing audio file:\n{e}")
+        st.error(f"❌ Error processing audio file:\n{e}")
