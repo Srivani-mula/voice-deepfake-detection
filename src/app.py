@@ -95,7 +95,8 @@ if uploaded_file is not None:
             input_path = tmp.name
 
         # Load audio safely
-        audio, sr = librosa.load(input_path, sr=16000, mono=True)
+        audio, sr = librosa.load(tmp_path, sr=16000)
+        features = extract_logmel(audio, sr)
 
         # Convert to WAV
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_tmp:
