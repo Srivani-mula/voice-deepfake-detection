@@ -27,11 +27,17 @@ st.write("Upload an audio file to check whether it is **Real (Bonafide)** or **F
 @st.cache_resource
 def load_model():
     model = CNNClassifier()
-    model.load_state_dict(
-        torch.load("cnn_asvspoof.pth", map_location="cpu")
-    )
+
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    MODEL_PATH = os.path.join(BASE_DIR, "cnn_asvspoof.pth")
+
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"Model file not found at {MODEL_PATH}")
+
+    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
     model.eval()
     return model
+
 
 
 model = load_model()
