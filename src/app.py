@@ -93,6 +93,8 @@ if uploaded_file is not None:
        else:
            label = "Uncertain"
 
+st.write("Bonafide probability:", round(probs[1] * 100, 2), "%")
+st.write("Spoof probability:", round(probs[0] * 100, 2), "%")
 
         # Cleanup
         os.remove(tmp_path)
