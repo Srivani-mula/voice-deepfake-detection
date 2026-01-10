@@ -8,95 +8,149 @@ import os
 from model import CNNClassifier
 from features import extract_logmel
 
-# ----------------------------------
+# ===============================
 # PAGE CONFIG
-# ----------------------------------
+# ===============================
 st.set_page_config(
     page_title="Voice Deepfake Detection",
     page_icon="🎙️",
     layout="centered"
 )
 
-st.title("🎙️ Voice Deepfake Detection")
-st.write("Upload an audio file to check whether it is **Real (Bonafide)** or **Fake (Spoof)**")
+# ===============================
+# UI STYLING
+# ===============================
+st.markdown("""
+<style>
+h1 {
+    color: #0B1C2D;
+    font-weight: 700;
+}
+.result-box {
+    padding: 1.5rem;
+    border-radius: 12px;
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+}
+.real {
+    background-color: #e6f4ea;
+    color: #1e7f43;
+}
+.fake {
+    background-color: #fdecea;
+    color: #b71c1c;
+}
+.uncertain {
+    background-color: #fff4e5;
+    color: #8a5a00;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# ----------------------------------
+# ===============================
 # LOAD MODEL
-# ----------------------------------
+# ===============================
 @st.cache_resource
 def load_model():
     model = CNNClassifier()
 
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    MODEL_PATH = os.path.join(BASE_DIR, "cnn_asvspoof.pth")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(base_dir, "cnn_asvspoof.pth")
 
-    if not os.path.exists(MODEL_PATH):
-        st.error("❌ Model file cnn_asvspoof.pth not found")
+    if not os.path.exists(model_path):
+        st.error("Model file cnn_asvspoof.pth not found")
         st.stop()
 
-    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+    model.load_state_dict(
+        torch.load(model_path, map_location="cpu")
+    )
     model.eval()
     return model
 
 model = load_model()
 
-# ----------------------------------
-# FILE UPLOAD
-# ----------------------------------
-uploaded_file = st.file_uploader(
-    "Upload audio file",
-    type=["wav", "mp3", "flac", "ogg", "aac", "m4a"]
+# ===============================
+# PREDICTION FUNCTION
+# ===============================
+def predict_audio(wav_path):
+    # Extract features (T, F)
+    features = extract_logmel(wav_path)
+
+    # Convert to tensor → (1, 1, F, T)
+    features = torch.tensor(features).unsqueeze(0).unsqueeze(0).float()
+
+    with torch.no_grad():
+        outputs = model(features)
+        probs = torch.softmax(outputs, dim=1).cpu().numpy()[0]
+
+    pred = int(np.argmax(probs))
+    confidence = float(np.max(probs))
+
+    # Confidence-based decision
+    if pred == 1 and confidence > 0.65:
+        label = "Bonafide (Real)"
+        css = "real"
+    elif pred == 0 and confidence > 0.65:
+        label = "Spoof (Fake)"
+        css = "fake"
+    else:
+        label = "Uncertain"
+        css = "uncertain"
+
+    return label, confidence, probs, css
+
+# ===============================
+# UI
+# ===============================
+st.title("🎙️ Voice Deepfake Detection")
+st.caption(
+    "Upload an audio file to check whether it is Real (Bonafide) or Fake (Spoof)"
 )
 
-# ----------------------------------
-# PROCESS AUDIO
-# ----------------------------------
+st.markdown("---")
+
+uploaded_file = st.file_uploader(
+    "Upload audio file",
+    type=["wav", "flac"]
+)
+
+# ===============================
+# HANDLE AUDIO
+# ===============================
 if uploaded_file is not None:
     st.audio(uploaded_file)
 
     try:
-        # Save uploaded file temporarily
+        # Save uploaded file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
             tmp.write(uploaded_file.read())
             tmp_path = tmp.name
 
-        # Load audio
+        # Load audio safely
         audio, sr = librosa.load(tmp_path, sr=16000)
 
-        # Feature extraction (IMPORTANT)
-        features = extract_logmel(audio, sr, max_len=100)  # (T, F)
+        if audio is None or len(audio) == 0:
+            raise ValueError("Empty or invalid audio")
 
-        # Convert to tensor
-        features = torch.tensor(features, dtype=torch.float32)
-
-        # Add batch & channel dimensions -> (1, 1, T, F)
-        features = features.unsqueeze(0).unsqueeze(0)
-        st.write("Feature shape:", features.shape)
-
-        # Model inference
-        with torch.no_grad():
-            outputs = model(features)
-            probs = torch.softmax(outputs, dim=1)
-            pred = torch.argmax(probs, dim=1).item()
-            confidence = probs[0][pred].item() * 100
-
-        # Label mapping (MATCH TRAINING)
-        label = "Fake (Spoof)" if pred == 0 else "Real (Bonafide)"
+        # Predict
+        label, confidence, probs, css = predict_audio(tmp_path)
 
         # Display result
-       pred = np.argmax(probs)
-       confidence = np.max(probs)
-       if pred == 1 and confidence > 0.65:
-           label = "Bonafide (Real)"
-       elif pred == 0 and confidence > 0.65:
-           label = "Spoof (Fake)"
-       else:
-           label = "Uncertain"
+        st.markdown(
+            f"<div class='result-box {css}'>"
+            f"{label}<br>"
+            f"Confidence: {confidence*100:.2f}%"
+            f"</div>",
+            unsafe_allow_html=True
+        )
 
-st.write("Bonafide probability:", round(probs[1] * 100, 2), "%")
-st.write("Spoof probability:", round(probs[0] * 100, 2), "%")
+        # Probabilities (for evaluation)
+        st.write("Bonafide probability:", round(probs[1] * 100, 2), "%")
+        st.write("Spoof probability:", round(probs[0] * 100, 2), "%")
 
-        # Cleanup
+        st.progress(int(confidence * 100))
+
         os.remove(tmp_path)
 
     except Exception as e:
