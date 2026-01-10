@@ -47,27 +47,20 @@ model = load_model()
 # Prediction Function
 # =====================================================
 def predict_audio(wav_path):
-    """
-    wav_path: str (path to .wav file)
-    """
+    features = extract_logmel(wav_path)   # (64, 96)
 
-    # Feature extraction (expects FILE PATH)
-    features = extract_logmel(wav_path)  # (n_mels, time)
-
-    # Convert to tensor -> (1, 1, n_mels, time)
-    features = torch.tensor(features, dtype=torch.float32)
-    features = features.unsqueeze(0).unsqueeze(0)
+    features = torch.tensor(features)
+    features = features.unsqueeze(0).unsqueeze(0)  # (1, 1, 64, 96)
 
     with torch.no_grad():
         outputs = model(features)
         probs = torch.softmax(outputs, dim=1).cpu().numpy()[0]
 
-    pred_class = int(np.argmax(probs))
+    label = "Bonafide (Real)" if np.argmax(probs) == 1 else "Spoof (Fake)"
     confidence = float(np.max(probs)) * 100
 
-    label = "Bonafide (Real)" if pred_class == 0 else "Spoof (Fake)"
+    return label, confidence
 
-    return label, confidence, probs
 
 
 # =====================================================
