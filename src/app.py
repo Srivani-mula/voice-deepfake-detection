@@ -75,31 +75,39 @@ if uploaded_file is not None:
     st.audio(uploaded_file)
 
     try:
-        # Save uploaded file to temp WAV
+        # Save uploaded file safely
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
             tmp.write(uploaded_file.read())
-            wav_path = tmp.name
+            input_path = tmp.name
+
+        # Load audio correctly (ONLY 2 values)
+        audio, sr = librosa.load(input_path, sr=16000, mono=True)
+
+        # Convert to clean WAV (model-safe)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_tmp:
+            wav_path = wav_tmp.name
+            sf.write(wav_path, audio, sr)
 
         # Predict
-        label, confidence, probs = predict_audio(wav_path)
+        label, confidence = predict_audio(wav_path)
 
-        # Display result
+        # Show result
         if "Bonafide" in label:
-            st.success(f"✅ {label}")
+            st.markdown(
+                f"<div class='result-box real'>✅ {label}<br>Confidence: {confidence:.2f}%</div>",
+                unsafe_allow_html=True
+            )
         else:
-            st.error(f"🚨 {label}")
+            st.markdown(
+                f"<div class='result-box fake'>🚨 {label}<br>Confidence: {confidence:.2f}%</div>",
+                unsafe_allow_html=True
+            )
 
-        st.write(f"**Confidence:** {confidence:.2f}%")
         st.progress(int(confidence))
 
-        st.write("### Class Probabilities")
-        st.write({
-            "Bonafide": float(probs[0]),
-            "Spoof": float(probs[1])
-        })
-
-        # Cleanup
+        # Cleanup temp files
+        os.remove(input_path)
         os.remove(wav_path)
 
     except Exception as e:
-        st.error(f"❌ Error processing audio:\n{e}")
+        st.error(f"❌ Error processing audio: {e}")
