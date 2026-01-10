@@ -1,145 +1,106 @@
-import streamlit as st
-import torch
-import numpy as np
-import librosa
-import soundfile as sf
-import tempfile
 import os
-
-# -----------------------------
-# IMPORT YOUR MODEL & FEATURES
-# -----------------------------
-
-from model import CNNClassifier        # ✅ correct class name
+import tempfile
+import numpy as np
+import torch
+import streamlit as st
 
 from model import CNNClassifier
+from features import extract_logmel
 
-from features import extract_logmel    # ✅ feature extractor
 
-# -----------------------------
-# PAGE CONFIG
-# -----------------------------
+# =====================================================
+# Streamlit Page Config
+# =====================================================
 st.set_page_config(
     page_title="Voice Deepfake Detection",
     page_icon="🎙️",
     layout="centered"
 )
 
-# -----------------------------
-# CUSTOM CSS (Clean UI)
-# -----------------------------
-st.markdown("""
-<style>
-body {
-    background-color: #f5f7fb;
-}
-.main {
-    background-color: #f5f7fb;
-}
-.block-container {
-    padding-top: 2rem;
-}
-.result-box {
-    padding: 1.5rem;
-    border-radius: 12px;
-    font-size: 20px;
-    font-weight: bold;
-    text-align: center;
-}
-.real {
-    background-color: #e6f4ea;
-    color: #1e7f43;
-}
-.fake {
-    background-color: #fdecea;
-    color: #b71c1c;
-}
-</style>
-""", unsafe_allow_html=True)
+st.title("🎙️ Voice Deepfake Detection")
+st.write("Upload an audio file to check whether it is **Real (Bonafide)** or **Fake (Spoof)**.")
 
-# -----------------------------
-# LOAD MODEL
-# -----------------------------
+
+# =====================================================
+# Load Model (cached)
+# =====================================================
 @st.cache_resource
 def load_model():
     model = CNNClassifier()
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    MODEL_PATH = os.path.join(BASE_DIR, "cnn_asvspoof.pth")
-    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
-
+    model.load_state_dict(
+        torch.load("cnn_asvspoof.pth", map_location="cpu")
+    )
     model.eval()
     return model
 
+
 model = load_model()
 
-# -----------------------------
-# PREDICTION FUNCTION
-# -----------------------------
+
+# =====================================================
+# Prediction Function
+# =====================================================
 def predict_audio(wav_path):
-    
-    features = extract_logmel(wav_path)
-    print("FEATURE SHAPE:", features.shape)
-    print("FEATURE MEAN:", features.mean())# (T, F)
-    features = torch.tensor(features).unsqueeze(0).unsqueeze(0).float()
+    """
+    wav_path: str (path to .wav file)
+    """
+
+    # Feature extraction (expects FILE PATH)
+    features = extract_logmel(wav_path)  # (n_mels, time)
+
+    # Convert to tensor -> (1, 1, n_mels, time)
+    features = torch.tensor(features, dtype=torch.float32)
+    features = features.unsqueeze(0).unsqueeze(0)
 
     with torch.no_grad():
         outputs = model(features)
         probs = torch.softmax(outputs, dim=1).cpu().numpy()[0]
 
-    label = "Bonafide (Real)" if np.argmax(probs) == 1 else "Spoof (Fake)"
+    pred_class = int(np.argmax(probs))
     confidence = float(np.max(probs)) * 100
+
+    label = "Bonafide (Real)" if pred_class == 0 else "Spoof (Fake)"
 
     return label, confidence, probs
 
-# -----------------------------
-# UI
-# -----------------------------
-st.title("🎙️ Voice Deepfake Detection")
-st.caption("AI-powered system to detect whether a voice is real or AI-generated")
 
-st.markdown("---")
-
+# =====================================================
+# File Upload UI
+# =====================================================
 uploaded_file = st.file_uploader(
     "Upload an audio file",
     type=["wav", "mp3", "flac", "ogg", "aac", "m4a"]
 )
 
-# -----------------------------
-# HANDLE UPLOAD
-# -----------------------------
 if uploaded_file is not None:
     st.audio(uploaded_file)
 
     try:
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        # Save uploaded file to temp WAV
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
             tmp.write(uploaded_file.read())
-            input_path = tmp.name
-
-        # Load audio safely
-        wav_path = input_path
-
+            wav_path = tmp.name
 
         # Predict
         label, confidence, probs = predict_audio(wav_path)
 
         # Display result
         if "Bonafide" in label:
-            st.markdown(
-                f"<div class='result-box real'>✅ {label}<br>Confidence: {confidence:.2f}%</div>",
-                unsafe_allow_html=True
-            )
+            st.success(f"✅ {label}")
         else:
-            st.markdown(
-                f"<div class='result-box fake'>🚨 {label}<br>Confidence: {confidence:.2f}%</div>",
-                unsafe_allow_html=True
-            )
+            st.error(f"🚨 {label}")
 
+        st.write(f"**Confidence:** {confidence:.2f}%")
         st.progress(int(confidence))
 
+        st.write("### Class Probabilities")
+        st.write({
+            "Bonafide": float(probs[0]),
+            "Spoof": float(probs[1])
+        })
+
         # Cleanup
-        os.remove(input_path)
         os.remove(wav_path)
 
     except Exception as e:
-        st.error(f"Error processing audio file:\n{e}")
+        st.error(f"❌ Error processing audio:\n{e}")
