@@ -99,6 +99,8 @@ if uploaded_file is not None:
         # Extract features
         features = extract_logmel(audio, sr)
         features = torch.tensor(features).unsqueeze(0)
+        features = torch.tensor(features).float()
+f       features = features.unsqueeze(0).unsqueeze(0)
 
         # Predict
         with torch.no_grad():
