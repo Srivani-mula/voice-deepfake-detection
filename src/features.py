@@ -1,27 +1,26 @@
 import librosa
 import numpy as np
 
-def extract_logmel(audio_path, sr=16000, n_mels=64, max_len=100):
-    y, _ = librosa.load(audio_path, sr=sr)
+ddef extract_logmel(wav_path, target_len=4):
+    audio, sr = librosa.load(wav_path, sr=16000)
+
+    # FIX AUDIO LENGTH (same as training)
+    max_len = target_len * sr
+    if len(audio) > max_len:
+        audio = audio[:max_len]
+    else:
+        audio = np.pad(audio, (0, max_len - len(audio)))
 
     mel = librosa.feature.melspectrogram(
-        y=y,
+        y=audio,
         sr=sr,
+        n_mels=100,
         n_fft=1024,
-        hop_length=160,
-        n_mels=n_mels
+        hop_length=512
     )
 
-    log_mel = librosa.power_to_db(mel, ref=np.max)
+    logmel = librosa.power_to_db(mel)
+    logmel = logmel.T  # (T, F)
 
-    # Pad / truncate time axis
-    if log_mel.shape[1] < max_len:
-        pad = max_len - log_mel.shape[1]
-        log_mel = np.pad(log_mel, ((0, 0), (0, pad)))
-    else:
-        log_mel = log_mel[:, :max_len]
+    return logmel
 
-    # Normalize
-    log_mel = (log_mel - log_mel.mean()) / (log_mel.std() + 1e-9)
-
-    return log_mel.astype(np.float32)
