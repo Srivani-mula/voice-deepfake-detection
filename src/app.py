@@ -84,12 +84,15 @@ if uploaded_file is not None:
         label = "Fake (Spoof)" if pred == 0 else "Real (Bonafide)"
 
         # Display result
-        if pred == 0:
-            st.error(f"🚨 {label} — Confidence: {confidence:.2f}%")
-        else:
-            st.success(f"✅ {label} — Confidence: {confidence:.2f}%")
+       pred = np.argmax(probs)
+       confidence = np.max(probs)
+       if pred == 1 and confidence > 0.65:
+           label = "Bonafide (Real)"
+       elif pred == 0 and confidence > 0.65:
+           label = "Spoof (Fake)"
+       else:
+           label = "Uncertain"
 
-        st.progress(int(confidence))
 
         # Cleanup
         os.remove(tmp_path)
