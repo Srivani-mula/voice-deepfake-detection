@@ -87,41 +87,26 @@ uploaded_file = st.file_uploader(
 
 # HANDLE UPLOAD
 if uploaded_file is not None:
-    st.audio(uploaded_file)
     try:
-        # Save uploaded file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-            tmp.write(uploaded_file.read())
-            input_path = tmp.name
+        # Save uploaded file to a temp location
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            tmp_file.write(uploaded_file.read())
+            tmp_path = tmp_file.name
 
-        # Load audio safely
+        # Load audio
         audio, sr = librosa.load(tmp_path, sr=16000)
-        features = extract_logmel(audio, sr)
 
-        # Convert to WAV
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_tmp:
-            wav_path = wav_tmp.name
-            sf.write(wav_path, audio, sr)
+        # Extract features
+        features = extract_logmel(audio, sr)
+        features = torch.tensor(features).unsqueeze(0)
 
         # Predict
-        label, confidence = predict_audio(wav_path)
+        with torch.no_grad():
+            output = model(features)
+            pred = torch.argmax(output, dim=1).item()
 
-        # Display result
-        if "Bonafide" in label:
-            st.markdown(
-                f"<div class='result-box real'>✅ {label}<br>Confidence: {confidence:.2f}%</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                f"<div class='result-box fake'>🚨 {label}<br>Confidence: {confidence:.2f}%</div>",
-                unsafe_allow_html=True,
-            )
+        label = "Real (Bonafide)" if pred == 0 else "Fake (Spoof)"
+        st.success(f"Prediction: {label}")
 
-        st.progress(int(confidence))
-
-        # Cleanup
-        os.remove(input_path)
-        os.remove(wav_path)
     except Exception as e:
-        st.error(f"❌ Error processing audio: {e}")
+        st.error(f"Error processing audio: {e}")
