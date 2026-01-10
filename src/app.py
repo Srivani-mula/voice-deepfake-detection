@@ -76,21 +76,40 @@ def normalize(feat):
 # -----------------------------
 # PREDICTION
 # -----------------------------
-def predict_audio(wav_path):
-    feat = extract_logmel(wav_path)   # (T, F)
-    feat = fix_length(feat)
-    feat = normalize(feat)
+def predict_audio(wav_path, max_duration=3.0):
+    # Load audio
+    y, sr = librosa.load(wav_path, sr=16000)
 
-    x = torch.tensor(feat).float().unsqueeze(0).unsqueeze(0)
+    # enforce mono
+    if y.ndim > 1:
+        y = librosa.to_mono(y)
 
+    # ensure length ~ max_duration seconds
+    target_samples = int(sr * max_duration)
+
+    if len(y) < target_samples:
+        # pad
+        y = np.pad(y, (0, target_samples - len(y)), mode='constant')
+    else:
+        # trim
+        y = y[:target_samples]
+
+    # extract features
+    features = extract_logmel(y)   # shape (T, F)
+
+    # shape to (1,1,T,F)
+    features = torch.tensor(features).unsqueeze(0).unsqueeze(0).float()
+
+    # model forward
     with torch.no_grad():
-        logits = model(x)
-        probs = torch.softmax(logits, dim=1).numpy()[0]
+        outputs = model(features)
+        probs = torch.softmax(outputs, dim=1).cpu().numpy()[0]
 
     label = "Bonafide (Real)" if np.argmax(probs) == 1 else "Spoof (Fake)"
     confidence = float(np.max(probs)) * 100
 
     return label, confidence, probs
+
 
 # -----------------------------
 # UI
