@@ -23,12 +23,8 @@ st.set_page_config(
 # -----------------------------
 st.markdown("""
 <style>
-body {
-    background-color: #f5f7fb;
-}
-.block-container {
-    padding-top: 2rem;
-}
+body { background-color: #f5f7fb; }
+.main { background-color: #f5f7fb; }
 .result-box {
     padding: 1.5rem;
     border-radius: 12px;
@@ -36,16 +32,18 @@ body {
     font-weight: bold;
     text-align: center;
 }
-.real {
-    background-color: #e6f4ea;
-    color: #1e7f43;
-}
-.fake {
-    background-color: #fdecea;
-    color: #b71c1c;
-}
+.real { background-color: #e6f4ea; color: #1e7f43; }
+.fake { background-color: #fdecea; color: #b71c1c; }
+h1 { color: #0B1C2D !important; }
 </style>
 """, unsafe_allow_html=True)
+
+# -----------------------------
+# CONSTANTS (MATCH TRAINING)
+# -----------------------------
+TARGET_SR = 16000
+FIXED_DURATION = 4.0   # seconds
+FIXED_FRAMES = 400     # must match training
 
 # -----------------------------
 # LOAD MODEL
@@ -53,46 +51,41 @@ body {
 @st.cache_resource
 def load_model():
     model = CNNClassifier()
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(base_dir, "cnn_asvspoof.pth")
-    model.load_state_dict(torch.load(model_path, map_location="cpu"))
+    base = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(base, "cnn_asvspoof.pth")
+    model.load_state_dict(torch.load(path, map_location="cpu"))
     model.eval()
     return model
 
 model = load_model()
 
 # -----------------------------
-# SAFE AUDIO LOADER (CRITICAL)
+# FEATURE POST-PROCESSING
 # -----------------------------
-def load_audio_safe(path, target_sr=16000):
-    try:
-        audio, sr = sf.read(path)
-        if audio.ndim > 1:
-            audio = np.mean(audio, axis=1)
-        if sr != target_sr:
-            audio = librosa.resample(audio, sr, target_sr)
-    except Exception:
-        audio, sr = librosa.load(path, sr=target_sr)
+def fix_length(feat, max_len=FIXED_FRAMES):
+    if feat.shape[0] < max_len:
+        pad = max_len - feat.shape[0]
+        feat = np.pad(feat, ((0, pad), (0, 0)), mode="constant")
+    else:
+        feat = feat[:max_len, :]
+    return feat
 
-    if audio is None or len(audio) < target_sr:
-        raise ValueError("Audio too short or corrupted")
-
-    return audio
+def normalize(feat):
+    return (feat - feat.mean()) / (feat.std() + 1e-9)
 
 # -----------------------------
-# PREDICTION FUNCTION
+# PREDICTION
 # -----------------------------
-def predict_audio(audio):
-    features = extract_logmel(audio)
+def predict_audio(wav_path):
+    feat = extract_logmel(wav_path)   # (T, F)
+    feat = fix_length(feat)
+    feat = normalize(feat)
 
-    if features is None or np.isnan(features).any():
-        raise ValueError("Feature extraction failed")
-
-    features = torch.tensor(features).unsqueeze(0).unsqueeze(0).float()
+    x = torch.tensor(feat).float().unsqueeze(0).unsqueeze(0)
 
     with torch.no_grad():
-        outputs = model(features)
-        probs = torch.softmax(outputs, dim=1).cpu().numpy()[0]
+        logits = model(x)
+        probs = torch.softmax(logits, dim=1).numpy()[0]
 
     label = "Bonafide (Real)" if np.argmax(probs) == 1 else "Spoof (Fake)"
     confidence = float(np.max(probs)) * 100
@@ -103,7 +96,7 @@ def predict_audio(audio):
 # UI
 # -----------------------------
 st.title("🎙️ Voice Deepfake Detection")
-st.caption("AI-powered system to detect whether a voice is real or AI-generated")
+st.caption("Detect whether a voice is real or AI-generated")
 st.markdown("---")
 
 uploaded_file = st.file_uploader(
@@ -111,20 +104,25 @@ uploaded_file = st.file_uploader(
     type=["wav", "mp3", "flac", "ogg", "aac", "m4a"]
 )
 
-# -----------------------------
-# HANDLE UPLOAD
-# -----------------------------
-if uploaded_file is not None:
+if uploaded_file:
     st.audio(uploaded_file)
 
     try:
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(uploaded_file.read())
-            input_path = tmp.name
+            temp_path = tmp.name
 
-        audio = load_audio_safe(input_path)
+        audio, _ = librosa.load(
+            temp_path,
+            sr=TARGET_SR,
+            duration=FIXED_DURATION
+        )
 
-        label, confidence, _ = predict_audio(audio)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_tmp:
+            wav_path = wav_tmp.name
+            sf.write(wav_path, audio, TARGET_SR)
+
+        label, confidence, probs = predict_audio(wav_path)
 
         if "Bonafide" in label:
             st.markdown(
@@ -139,7 +137,8 @@ if uploaded_file is not None:
 
         st.progress(int(confidence))
 
-        os.remove(input_path)
+        os.remove(temp_path)
+        os.remove(wav_path)
 
     except Exception as e:
-        st.error(f"❌ Error processing audio file:\n{e}")
+        st.error(f"❌ Error processing audio:\n{e}")
