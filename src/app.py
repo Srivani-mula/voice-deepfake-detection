@@ -71,6 +71,7 @@ if uploaded_file is not None:
 
         # Add batch & channel dimensions -> (1, 1, T, F)
         features = features.unsqueeze(0).unsqueeze(0)
+        st.write("Feature shape:", features.shape)
 
         # Model inference
         with torch.no_grad():
