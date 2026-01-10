@@ -66,10 +66,8 @@ class ASVspoofDataset(Dataset):
         )
 
         # ✅ CORRECT LABEL MAPPING
-        self.label_map = {
-            "bonafide": 0,  # REAL
-            "spoof": 1      # FAKE
-        }
+        label = "Bonafide (Real)" if np.argmax(probs) == 0 else "Spoof (Fake)"
+
 
         # ✅ Print TRUE class distribution (ONCE)
         if split == "dev":
@@ -94,6 +92,7 @@ class ASVspoofDataset(Dataset):
             return self.__getitem__((idx + 1) % len(self.df))
 
         features = extract_logmel(audio_path)
+        
         features = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
         label = torch.tensor(label, dtype=torch.long)
 
