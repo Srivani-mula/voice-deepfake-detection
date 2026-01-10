@@ -117,12 +117,8 @@ if uploaded_file is not None:
             input_path = tmp.name
 
         # Load audio safely
-        audio, sr = librosa.load(input_path, sr=16000)
+        wav_path = input_path
 
-        # Convert to WAV (model-safe)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_tmp:
-            wav_path = wav_tmp.name
-            sf.write(wav_path, audio, sr)
 
         # Predict
         label, confidence, probs = predict_audio(wav_path)
