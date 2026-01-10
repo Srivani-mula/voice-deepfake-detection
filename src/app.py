@@ -1,56 +1,81 @@
-import os
-import tempfile
-import numpy as np
-import torch
 import streamlit as st
+import torch
+import numpy as np
+import librosa
+import soundfile as sf
+import tempfile
+import os
 
 from model import CNNClassifier
 from features import extract_logmel
 
 
-# =====================================================
-# Streamlit Page Config
-# =====================================================
+# =============================
+# PAGE CONFIG
+# =============================
 st.set_page_config(
     page_title="Voice Deepfake Detection",
     page_icon="🎙️",
     layout="centered"
 )
 
-st.title("🎙️ Voice Deepfake Detection")
-st.write("Upload an audio file to check whether it is **Real (Bonafide)** or **Fake (Spoof)**.")
+
+# =============================
+# CUSTOM CSS
+# =============================
+st.markdown("""
+<style>
+body {
+    background-color: #f5f7fb;
+}
+.main {
+    background-color: #f5f7fb;
+}
+h1 {
+    color: #0B1C2D !important;
+    font-weight: 700;
+}
+.result-box {
+    padding: 1.5rem;
+    border-radius: 12px;
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+}
+.real {
+    background-color: #e6f4ea;
+    color: #1e7f43;
+}
+.fake {
+    background-color: #fdecea;
+    color: #b71c1c;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
-# =====================================================
-# Load Model (cached)
-# =====================================================
+# =============================
+# LOAD MODEL
+# =============================
 @st.cache_resource
 def load_model():
     model = CNNClassifier()
-
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    MODEL_PATH = os.path.join(BASE_DIR, "cnn_asvspoof.pth")
-
-    if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(f"Model file not found at {MODEL_PATH}")
-
-    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(base_dir, "cnn_asvspoof.pth")
+    model.load_state_dict(torch.load(model_path, map_location="cpu"))
     model.eval()
     return model
-
 
 
 model = load_model()
 
 
-# =====================================================
-# Prediction Function
-# =====================================================
+# =============================
+# PREDICTION FUNCTION
+# =============================
 def predict_audio(wav_path):
-    features = extract_logmel(wav_path)   # (64, 96)
-
-    features = torch.tensor(features)
-    features = features.unsqueeze(0).unsqueeze(0)  # (1, 1, 64, 96)
+    features = extract_logmel(wav_path)          # (64, 100)
+    features = torch.tensor(features).unsqueeze(0).unsqueeze(0).float()
 
     with torch.no_grad():
         outputs = model(features)
@@ -62,28 +87,36 @@ def predict_audio(wav_path):
     return label, confidence
 
 
+# =============================
+# UI
+# =============================
+st.title("🎙️ Voice Deepfake Detection")
+st.caption("Upload an audio file to check whether it is Real (Bonafide) or Fake (Spoof).")
 
-# =====================================================
-# File Upload UI
-# =====================================================
+st.markdown("---")
+
 uploaded_file = st.file_uploader(
     "Upload an audio file",
     type=["wav", "mp3", "flac", "ogg", "aac", "m4a"]
 )
 
+
+# =============================
+# HANDLE UPLOAD
+# =============================
 if uploaded_file is not None:
     st.audio(uploaded_file)
 
     try:
-        # Save uploaded file safely
+        # Save uploaded file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
             tmp.write(uploaded_file.read())
             input_path = tmp.name
 
-        # Load audio correctly (ONLY 2 values)
+        # Load audio safely
         audio, sr = librosa.load(input_path, sr=16000, mono=True)
 
-        # Convert to clean WAV (model-safe)
+        # Convert to WAV
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_tmp:
             wav_path = wav_tmp.name
             sf.write(wav_path, audio, sr)
@@ -91,7 +124,7 @@ if uploaded_file is not None:
         # Predict
         label, confidence = predict_audio(wav_path)
 
-        # Show result
+        # Display result
         if "Bonafide" in label:
             st.markdown(
                 f"<div class='result-box real'>✅ {label}<br>Confidence: {confidence:.2f}%</div>",
@@ -105,7 +138,7 @@ if uploaded_file is not None:
 
         st.progress(int(confidence))
 
-        # Cleanup temp files
+        # Cleanup
         os.remove(input_path)
         os.remove(wav_path)
 
