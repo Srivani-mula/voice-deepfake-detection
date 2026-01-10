@@ -5,7 +5,6 @@ import librosa
 import soundfile as sf
 import tempfile
 import os
-
 from model import CNNClassifier
 from features import extract_logmel
 
