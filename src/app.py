@@ -64,7 +64,7 @@ if uploaded_file is not None:
         audio, sr = librosa.load(tmp_path, sr=16000)
 
         # Feature extraction (IMPORTANT)
-        features = extract_logmel(audio, sr)  # (T, F)
+        features = extract_logmel(audio, sr, max_len=100)  # (T, F)
 
         # Convert to tensor
         features = torch.tensor(features, dtype=torch.float32)
