@@ -9,11 +9,6 @@ from features import extract_logmel
 # LOAD PROTOCOL FILE
 # =====================================================
 def load_protocol(split):
-    """
-    Load ASVspoof 2019 LA protocol file.
-    split: 'train', 'dev', or 'eval'
-    """
-
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     protocol_files = {
@@ -34,7 +29,6 @@ def load_protocol(split):
     df = pd.read_csv(protocol_path, sep=" ", header=None)
     df = df.iloc[:, :5]
     df.columns = ["speaker", "file_id", "env", "attack", "label"]
-
     return df
 
 
@@ -48,8 +42,7 @@ class ASVspoofDataset(Dataset):
         self.split = split
         self.df = load_protocol(split)
 
-        # ✅ Correct label mapping
-        # 0 = Spoof (Fake), 1 = Bonafide (Real)
+        # 0 = Spoof, 1 = Bonafide
         self.label_map = {
             "spoof": 0,
             "bonafide": 1
@@ -72,7 +65,6 @@ class ASVspoofDataset(Dataset):
             "flac",
         )
 
-        # Print class distribution once for validation set
         if split == "dev":
             print("\nValidation set label distribution:")
             print(self.df["label"].value_counts())
@@ -87,23 +79,19 @@ class ASVspoofDataset(Dataset):
         file_id = row["file_id"]
         label_str = row["label"]
 
-        # Convert label string → integer
         label = self.label_map[label_str]
-
         audio_path = os.path.join(self.audio_dir, f"{file_id}.flac")
 
-        # Skip missing files safely
         if not os.path.exists(audio_path):
             return self.__getitem__((idx + 1) % len(self.df))
 
-        # Extract log-mel features
-        # extract_logmel returns shape: (1, n_mels, time)
+        # log-mel → (128, T)
         features = extract_logmel(audio_path)
 
-        # Convert to tensor (DO NOT unsqueeze again)
-        features = torch.tensor(features, dtype=torch.float32)
-        label = torch.tensor(label, dtype=torch.long)
+        # 🔥 ADD CHANNEL DIMENSION → (1, 128, T)
+        features = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
 
+        label = torch.tensor(label, dtype=torch.long)
         return features, label
 
 
@@ -111,9 +99,7 @@ class ASVspoofDataset(Dataset):
 # SANITY CHECK
 # =====================================================
 if __name__ == "__main__":
-    dataset = ASVspoofDataset(split="train")
-    print("Total samples:", len(dataset))
-
+    dataset = ASVspoofDataset("train")
     x, y = dataset[0]
-    print("Feature shape:", x.shape)  # Expected: (1, 128, T)
-    print("Label:", y.item(), "(0 = SPOOF, 1 = BONAFIDE)")
+    print("Feature shape:", x.shape)  # (1, 128, T)
+    print("Label:", y.item())
