@@ -78,7 +78,7 @@ def predict_audio(wav_path):
     features = extract_logmel(wav_path)
 
     # Convert to tensor → (1, 1, F, T)
-    features = torch.tensor(features).unsqueeze(0).unsqueeze(0).float()
+    features = torch.tensor(features).unsqueeze(1).float()
 
     with torch.no_grad():
         outputs = model(features)
