@@ -74,29 +74,24 @@ model = load_model()
 # PREDICTION FUNCTION
 # ===============================
 def predict_audio(wav_path):
-    # Extract features (T, F)
     features = extract_logmel(wav_path)
-
-    # Convert to tensor → (1, 1, F, T)
     features = torch.tensor(features).unsqueeze(1).float()
 
     with torch.no_grad():
         outputs = model(features)
         probs = torch.softmax(outputs, dim=1).cpu().numpy()[0]
 
-    pred = int(np.argmax(probs))
-    confidence = float(np.max(probs))
+    fake_prob = probs[0]
+    real_prob = probs[1]
 
-    # Confidence-based decision
-    if pred == 1 and confidence > 0.65:
+    if real_prob > fake_prob:
         label = "Bonafide (Real)"
+        confidence = real_prob
         css = "real"
-    elif pred == 0 and confidence > 0.65:
-        label = "Spoof (Fake)"
-        css = "fake"
     else:
-        label = "Uncertain"
-        css = "uncertain"
+        label = "Spoof (Fake)"
+        confidence = fake_prob
+        css = "fake"
 
     return label, confidence, probs, css
 
