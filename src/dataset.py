@@ -48,6 +48,13 @@ class ASVspoofDataset(Dataset):
         self.split = split
         self.df = load_protocol(split)
 
+        # ✅ Correct label mapping
+        # 0 = Spoof (Fake), 1 = Bonafide (Real)
+        self.label_map = {
+            "spoof": 0,
+            "bonafide": 1
+        }
+
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         audio_dir_map = {
@@ -65,7 +72,7 @@ class ASVspoofDataset(Dataset):
             "flac",
         )
 
-        # ✅ Print TRUE class distribution (ONCE)
+        # Print class distribution once for validation set
         if split == "dev":
             print("\nValidation set label distribution:")
             print(self.df["label"].value_counts())
@@ -80,16 +87,21 @@ class ASVspoofDataset(Dataset):
         file_id = row["file_id"]
         label_str = row["label"]
 
+        # Convert label string → integer
         label = self.label_map[label_str]
 
         audio_path = os.path.join(self.audio_dir, f"{file_id}.flac")
 
+        # Skip missing files safely
         if not os.path.exists(audio_path):
             return self.__getitem__((idx + 1) % len(self.df))
 
+        # Extract log-mel features
+        # extract_logmel returns shape: (1, n_mels, time)
         features = extract_logmel(audio_path)
-        
-        features = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
+
+        # Convert to tensor (DO NOT unsqueeze again)
+        features = torch.tensor(features, dtype=torch.float32)
         label = torch.tensor(label, dtype=torch.long)
 
         return features, label
@@ -103,5 +115,5 @@ if __name__ == "__main__":
     print("Total samples:", len(dataset))
 
     x, y = dataset[0]
-    print("Feature shape:", x.shape)
-    print("Label:", y.item(), "(0 = REAL, 1 = FAKE)")
+    print("Feature shape:", x.shape)  # Expected: (1, 128, T)
+    print("Label:", y.item(), "(0 = SPOOF, 1 = BONAFIDE)")

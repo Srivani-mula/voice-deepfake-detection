@@ -27,5 +27,6 @@ class CNNClassifier(nn.Module):
 
 if __name__ == "__main__":
     model = CNNClassifier()
-    dummy = torch.randn(2, 1, 64, 100)
-    print(model(dummy).shape)
+    dummy = torch.randn(2, 1, 128, 400)  # MUST match extract_logmel output
+    print(model(dummy).shape)  # Expected: torch.Size([2, 2])
+
