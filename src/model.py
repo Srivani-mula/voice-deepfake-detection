@@ -12,7 +12,7 @@ class CNNClassifier(nn.Module):
 
         self.pool = nn.MaxPool2d(2)
 
-        self.fc1 = nn.Linear(64 * 8 * 12, 128)
+        self.fc1 = nn.Linear(64 * 16 * 50, 128)
         self.fc2 = nn.Linear(128, 2)
 
     def forward(self, x):
