@@ -65,10 +65,6 @@ class ASVspoofDataset(Dataset):
             "flac",
         )
 
-        # ✅ CORRECT LABEL MAPPING
-        label = "Bonafide (Real)" if np.argmax(probs) == 0 else "Spoof (Fake)"
-
-
         # ✅ Print TRUE class distribution (ONCE)
         if split == "dev":
             print("\nValidation set label distribution:")
